@@ -23,14 +23,17 @@ runs in LM Studio.
 mic ──► Parakeet (MLX, in-process) ──► transcript ──┬──► name detector ──► notification + brief
          live text every ~2 s                        ├──► tracker (every 45 s) ──► running notes
                                                      └──► brief (on demand) ──► "right now / last said / you could say"
+
+each sentence ──► TitaNet voiceprint (CPU) ──► voice S1, S2, … ──► named from what people say
 ```
 
-Two models, two jobs:
+Three models, three jobs:
 
 | Role | Model | Where it runs | Why |
 |---|---|---|---|
 | Speech-to-text | `parakeet-tdt-0.6b-v3` (0.6B) | in-process, MLX | Fastest STT on Apple Silicon (~2× faster than Whisper), 25 languages, ~1.2 GB |
 | Notes + briefs | `qwen/qwen3.5-4b` (configurable) | LM Studio | Best speed/quality on 16 GB — see *Performance* below. Any LM Studio model works; swap in `config.toml` |
+| Who's speaking | NVIDIA NeMo TitaNet-small (`nemo_en_titanet_small.onnx`) | in-process, CPU via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | A voiceprint per sentence in ~25 ms, 40 MB. Tells voices apart; names come from what people say (see *Who said what*) |
 
 The app talks to LM Studio's native REST API (`/api/v1/chat`) rather than the OpenAI
 endpoint because that is the only way to switch a thinking model's reasoning **off** per
@@ -80,6 +83,10 @@ shows latency so you can compare on a real meeting.
 - Apple Silicon Mac, macOS 14+ (tested on an M5, 16 GB)
 - [LM Studio](https://lmstudio.ai) (for now) — `blaah models get qwen/qwen3.5-4b` fetches a good default
 - Python 3.11+ and [uv](https://docs.astral.sh/uv/)
+
+The speech and voice models download themselves on first run (Parakeet ~1.2 GB from Hugging
+Face; TitaNet 40 MB from the [sherpa-onnx releases](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models)
+into `models/`, which isn't committed). Turn voices off with `[speakers] enabled = false`.
 
 ## Run
 
@@ -218,9 +225,8 @@ and get names from what people say:
 
 **Tell it who's in the meeting.** At start the app asks (pre-filled from your last meeting;
 Enter to accept), or pass `--people "Shaun, Gavin"`. The transcriber mishears names it hasn't
-learned — in a real Meet call one colleague's name came out as "given" and "Kivinus",
-another's as "your shock" — so in cue positions a word that *sounds like* an attendee counts as them, while
-"they have given us" is left alone. The list also goes into the notes, brief and summary
+learned — "Gavin" can come out as "given", "Shaun" as "shown" — so in cue positions a word
+that *sounds like* an attendee counts as them, while "they have given us" is left alone. The list also goes into the notes, brief and summary
 prompts, so they spell names right. Quick reactions ("Sorry.", "Cool.", "Sounds good") are
 skipped when deciding who a hand-off went to.
 
