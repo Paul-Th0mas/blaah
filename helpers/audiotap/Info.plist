@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Embedded into the audiotap binary so macOS can attribute the system-audio
+         recording permission to it. Without NSAudioCaptureUsageDescription, Core Audio
+         silently delivers zero-filled buffers while every call reports success. -->
+    <key>CFBundleIdentifier</key>
+    <string>local.meeting-assistant.audiotap</string>
+    <key>CFBundleName</key>
+    <string>Meeting Assistant audio tap</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Meeting Assistant transcribes the meeting audio playing on this Mac, entirely on-device.</string>
+</dict>
+</plist>

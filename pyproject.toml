@@ -1,0 +1,35 @@
+[project]
+name = "meeting-assistant"
+version = "0.1.0"
+description = "Blaah — a local meeting assistant that hands you a reply when your name is called (Parakeet + LM Studio)"
+readme = "README.md"
+authors = [
+    { name = "Paul" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.6",
+    "parakeet-mlx>=0.5.3",
+    "sherpa-onnx>=1.13.8",
+    "sherpa-onnx-core==1.13.8",
+    "sounddevice>=0.5.6",
+    "soundfile>=0.14.0",
+    "soxr>=1.1.0",
+    "textual>=8.2.8",
+]
+
+[project.scripts]
+blaah = "meeting_assistant.__main__:main"
+meeting-assistant = "meeting_assistant.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

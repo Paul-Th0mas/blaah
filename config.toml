@@ -1,0 +1,95 @@
+# Blaah's shared settings. Your personal ones (your name, your model) go in
+# ~/.config/blaah/config.toml, which overrides this file — `blaah setup` writes it.
+# Restart the app to apply changes.
+
+[user]
+# Your name and nicknames: when someone says one, Blaah hands you a reply.
+# Case-insensitive, whole-word, with light fuzzy matching for transcription slips.
+# Leave empty here; set yours with `blaah setup` (or the app asks on first run).
+names = []
+
+[audio]
+# "" = follow the system default microphone. Otherwise a substring of a device name to always use.
+input_device = ""
+# When the default mic is a Bluetooth headset, record from the Mac's built-in mic instead:
+# headset mics are call-quality, opening one puts the buds into call mode (worse sound for
+# you), and some send almost nothing (a pair of Bluetooth earbuds did). With headphones the built-in mic hears
+# only you. With this off, a Bluetooth mic that is never audible in its first 15 s is
+# replaced by the built-in one automatically.
+prefer_builtin_mic = true
+# Also capture what the Mac is playing (remote meeting participants), mixed with the mic.
+# "" = off (mic only — hears the speakers); "all" = everything the Mac plays; or part of an
+# app's bundle id to tap one app: "brave", "chrome", "safari", "zoom", "teams", "slack".
+# Native macOS audio tap (14.2+), no driver; macOS asks once for system-audio recording permission.
+system_audio = "all"
+system_gain = 1.0
+mic_gain = 1.0
+sample_rate = 16000
+# How often audio goes to the speech model. Each call re-reads ~20 s of context, so 2 s
+# chunks cost about half the GPU of 1 s chunks (live text updates every 2 s). If the Mac
+# falls behind anyway, queued audio is processed in one batch until it catches up.
+chunk_seconds = 2.0
+
+[stt]
+# Parakeet runs in-process on the GPU via MLX. v3 = 25 languages, v2 = English only.
+model = "mlx-community/parakeet-tdt-0.6b-v3"
+# Attention context in encoder frames (80 ms each). Right context sets how long
+# after a word is spoken it becomes "final" (256 ≈ 20 s). Lower = faster, less accurate.
+left_context = 256
+right_context = 256
+
+[llm]
+# Where notes, briefs and summaries come from. "lmstudio" is built in (and needed for now);
+# provider plugins can add others — see meeting_assistant/providers.py.
+provider = "lmstudio"
+# The model: any chat model downloaded in LM Studio. Change it with `blaah models use KEY`
+# or `m` in the app (both save to your personal config). If it isn't downloaded, Blaah uses
+# one that is and says so. Measured on a 16 GB M5: qwen3.5-4b briefs in ~4 s with quality
+# close to the 9B (~8 s); granite-4.0-h-micro is faster still but invents answers.
+base_url = "http://localhost:1234"
+model = "qwen/qwen3.5-4b"
+# Measured on a 16 GB M5: 4096 ctx / 1 slot runs the 9B at ~15 tok/s; 8192 / 4 slots halves that.
+# If LM Studio already has the model loaded heavier than this, the app reloads it (auto_load).
+context_length = 4096
+parallel = 1
+auto_load = true
+# Unload any other LM Studio models first; two resident models is how a 16 GB Mac starts swapping.
+unload_others = true
+temperature = 0.2
+max_notes_tokens = 700
+max_brief_tokens = 350
+
+[tracker]
+# How often the running notes are refreshed, and how much new speech is needed first.
+interval_seconds = 45
+min_new_words = 40
+# How many seconds of raw transcript the brief gets on top of the notes.
+recent_window_seconds = 180
+
+[triggers]
+# Ignore repeat mentions within this window. Keep >= ~21 s (Parakeet finalisation lag)
+# so one mention can't fire twice (once from live text, once when finalised).
+name_cooldown_seconds = 30
+notify = true
+auto_brief = true
+
+[speakers]
+# Tell voices apart and name them from what people say ("Dev, over to you", "Raj here",
+# "Thanks, Karen"). Voice model: NVIDIA TitaNet-small, downloaded on first run (40 MB).
+enabled = true
+model = "models/nemo_en_titanet_small.onnx"
+# Voice similarity needed to count as the same person (tuned on a real 4-person meeting).
+threshold = 0.35
+# Keep colleagues' voiceprints between meetings (meetings/_voices/) so they're named from
+# their first sentence next time. Off by default: voiceprints are biometric data — only
+# enable it if the people in your meetings are fine with that. Your own voiceprint
+# (`meeting-assistant enroll`) is always used when present.
+remember_voices = false
+# Optional: people you often meet with. Only needed for names that are also ordinary words
+# (Will, Faith, Sunny) — other names are recognised without being listed.
+people = []
+
+[storage]
+# One folder per meeting (plain files: meeting.json, transcript.md/.jsonl, notes.md,
+# briefs.md, summary.md). Relative to the project, or absolute (e.g. an Obsidian vault).
+meetings_dir = "meetings"
