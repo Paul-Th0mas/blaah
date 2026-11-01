@@ -274,3 +274,13 @@ def test_draft_skipping_only_patches_models_whose_decode_it_can_mimic():
     real = ctc.decode
     _skippable_drafts(ctc)
     assert ctc.decode is real  # CTC returns tokens alone; a tuple stub would break the live text
+
+
+def test_introductions_are_not_someone_asking_you():
+    d = NameDetector(["Paul"], cooldown_seconds=0)
+    for intro in ("Hi all, Paul here.", "This is Paul from platform.", "I'm Paul.", "Paul speaking.",
+                  "Morning, my name is Paul and I run the data team."):
+        assert d.check(intro) is None and d.count(intro) == 0, intro
+    for ask in ("Paul, can you take this?", "what do you think, Paul?", "Can Paul here confirm the date?",
+                "I'm Paul's backup this week, so Paul can you check?"):
+        assert d.check(ask) == "Paul", ask

@@ -120,6 +120,10 @@ meetings/2026-01-15_100000_weekly-sync/
   transcript.jsonl the same, exact, for the app
 ```
 
+A run that ends before anyone speaks (a crash, a dead battery) leaves an empty folder; the
+next meeting tidies those away once they are 12 hours old. Folders with anything in them
+are never touched.
+
 ```bash
 uv run blaah --title "Weekly sync"     # name it up front (or when quitting)
 uv run blaah list                      # past meetings
@@ -161,7 +165,8 @@ Settings come in two layers:
 The important bits:
 
 - `[user] names` — your name and nicknames: when someone says one, you get a brief. Add
-  spellings the transcriber tends to produce for it (it hears what it hears).
+  spellings the transcriber tends to produce for it (it hears what it hears). Introductions
+  ("Paul here", "this is Paul", "I'm Paul") don't count, and one mention gives one brief.
 - `[llm] model` — which model writes notes and briefs (see *Choosing a model*).
 - `[audio] input_device` — see below for capturing remote meetings.
 - `[tracker] interval_seconds` — how often notes are refreshed.

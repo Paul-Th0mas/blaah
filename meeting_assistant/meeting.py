@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import re
+import shutil
 import time
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
@@ -10,6 +12,7 @@ from pathlib import Path
 RECORD_FILE = "meeting.json"
 STAMP_FORMAT = "%Y-%m-%d_%H%M%S"
 STAMP_LEN = 17  # len("2026-10-10_131336")
+ABANDONED_SECONDS = 12 * 3600  # an empty meeting folder this old is left over from a crash
 
 
 def attendee_note(attendees: list[str], user: str = "") -> str:
@@ -24,6 +27,16 @@ def attendee_note(attendees: list[str], user: str = "") -> str:
 def slugify(title: str, max_len: int = 40) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug[:max_len].rstrip("-")
+
+
+def _claimed(record_file: Path) -> bool:
+    with record_file.open("rb") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(f, fcntl.LOCK_UN)
+        return False
 
 
 def _has_speech(transcript: Path) -> bool:
@@ -80,8 +93,15 @@ class MeetingRecord:
     @classmethod
     def create(cls, root: Path, title: str = "", **meta: str) -> "MeetingRecord":
         rec = cls(dir=root, title=title.strip(), **meta)
-        rec.dir = root / rec._folder_name()
-        rec.dir.mkdir(parents=True, exist_ok=True)
+        root.mkdir(parents=True, exist_ok=True)
+        name, n = rec._folder_name(), 1
+        while True:  # two meetings started in the same second each get their own folder
+            rec.dir = root / (name if n == 1 else f"{name}-{n}")
+            try:
+                rec.dir.mkdir()
+                break
+            except FileExistsError:
+                n += 1
         rec.save()
         return rec
 
@@ -109,6 +129,39 @@ class MeetingRecord:
             return []
         recs = [MeetingRecord.load(d) for d in root.iterdir() if d.is_dir() and _has_speech(d / "transcript.jsonl")]
         return sorted(recs, key=lambda r: r.started, reverse=True)
+
+    @staticmethod
+    def prune_empty(root: Path, older_than: float = ABANDONED_SECONDS) -> list[Path]:
+        """Delete folders left by runs that ended before anyone spoke (crash, kill, battery).
+
+        Only a folder holding exactly meeting.json and an empty transcript, started more than
+        `older_than` ago and not claimed by a running session (see `claim`) — so nothing with
+        content, and never a meeting another window is still waiting in. Returns what went.
+        """
+        if not root.exists():
+            return []
+        removed = []
+        for d in root.iterdir():
+            files = {f.name: f for f in d.iterdir()} if d.is_dir() else {}
+            if set(files) != {RECORD_FILE, "transcript.jsonl", "transcript.md"}:
+                continue
+            if files["transcript.jsonl"].stat().st_size or files["transcript.md"].stat().st_size:
+                continue
+            try:
+                started = float(json.loads(files[RECORD_FILE].read_text()).get("started", 0))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if time.time() - started > older_than and not _claimed(files[RECORD_FILE]):
+                shutil.rmtree(d, ignore_errors=True)
+                removed.append(d)
+        return removed
+
+    def claim(self):
+        """Mark this meeting as in use until the returned file is closed (or the process ends),
+        so another window's `prune_empty` leaves it alone however long it stays quiet."""
+        f = (self.dir / RECORD_FILE).open("rb")
+        fcntl.flock(f, fcntl.LOCK_SH)
+        return f
 
     def save(self) -> None:
         data = {k: v for k, v in asdict(self).items() if k != "dir"}

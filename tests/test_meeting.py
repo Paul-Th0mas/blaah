@@ -74,3 +74,42 @@ def test_a_meeting_where_nothing_was_said_never_becomes_latest(tmp_path):
     crashed = MeetingRecord.create(tmp_path)  # the app was killed before anyone spoke
     TranscriptStore(crashed.dir).close()
     assert [r.title for r in MeetingRecord.list_all(tmp_path)] == ["Standup"]
+
+
+def test_only_old_untouched_empty_meeting_folders_are_pruned(tmp_path):
+    from meeting_assistant.transcript import Segment, TranscriptStore
+
+    def folder(hours_ago: float, said: str = "", extra: str = "") -> MeetingRecord:
+        rec = MeetingRecord.create(tmp_path, title=f"{hours_ago}h {said} {extra}", started=time.time() - hours_ago * 3600)
+        store = TranscriptStore(rec.dir)
+        if said:
+            store.add(Segment(time.time(), time.time() + 1, said))
+        store.close()
+        if extra:
+            rec.path(extra).write_text("kept\n")
+        return rec
+
+    crashed = folder(13)  # killed before anyone spoke, yesterday
+    waiting = folder(1)  # another window, waiting for its meeting to start
+    talked = folder(13, said="We ship on Friday.")
+    briefed = folder(13, extra="briefs.md")
+    assert MeetingRecord.prune_empty(tmp_path) == [crashed.dir]
+    assert not crashed.dir.exists() and waiting.dir.exists() and talked.dir.exists() and briefed.dir.exists()
+
+
+def test_a_quiet_meeting_still_open_in_another_window_is_not_pruned(tmp_path):
+    from meeting_assistant.transcript import TranscriptStore
+
+    idle = MeetingRecord.create(tmp_path, started=time.time() - 13 * 3600)  # open all day, nobody spoke
+    TranscriptStore(idle.dir).close()
+    claim = idle.claim()
+    assert MeetingRecord.prune_empty(tmp_path) == [] and idle.dir.exists()
+    claim.close()  # that window quit (or crashed: the OS drops the lock)
+    assert MeetingRecord.prune_empty(tmp_path) == [idle.dir]
+
+
+def test_meetings_started_in_the_same_second_get_their_own_folders(tmp_path):
+    started = time.time()
+    a = MeetingRecord.create(tmp_path, started=started)
+    b = MeetingRecord.create(tmp_path, started=started)  # a second window, same second
+    assert a.dir != b.dir and b.dir.name == a.dir.name + "-2"

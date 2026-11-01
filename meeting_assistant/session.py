@@ -39,10 +39,12 @@ class Session:
         attendees: list[str] | None = None,
     ):
         self.settings = settings
+        MeetingRecord.prune_empty(settings.meetings_dir)  # leftovers of runs that crashed before anyone spoke
         self.record = MeetingRecord.create(
             settings.meetings_dir, title=title, stt_model=settings.stt.model, llm_model=settings.llm.model
         )
         self.session_dir = self.record.dir
+        self._claim = self.record.claim()  # in use: another window won't tidy it away
 
         self.store = TranscriptStore(self.session_dir)
         self.audio = audio or make_capture(settings.audio)
@@ -184,6 +186,7 @@ class Session:
         for thread in (self.transcriber, self.tracker):
             if thread.is_alive():
                 thread.join(timeout=30)
+        self._claim.close()
         shutil.rmtree(self.record.dir, ignore_errors=True)
 
     # ----- ending a meeting -----
@@ -227,6 +230,7 @@ class Session:
 
     def complete(self, title: str | None = None) -> MeetingRecord | None:
         """Finalise the record (title, counts, folder name). A meeting with nothing transcribed leaves no folder."""
+        self._claim.close()
         if len(self.store) == 0:
             shutil.rmtree(self.record.dir, ignore_errors=True)
             return None
